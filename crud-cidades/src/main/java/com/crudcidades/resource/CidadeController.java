@@ -1,36 +1,43 @@
 package com.crudcidades.resource;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.validation.Valid;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import com.crudcidades.entities.Cidade;
+import com.crudcidades.cidade.Cidade;
+import com.crudcidades.cidade.CidadeEntidade;
+import com.crudcidades.cidade.CidadeRepository;
 
 @Controller
 public class CidadeController {
 	
-	private Set<Cidade> cidades;
+	private final CidadeRepository repository;
 	
-	public CidadeController() {
-		cidades = new HashSet<>();
+	
+	public CidadeController(final CidadeRepository repository) {
+		this.repository = repository;
 	}
 
 	@RequestMapping(value = "/", method = RequestMethod.GET)
 	public String listar(Model memoria) {
 		
-		memoria.addAttribute("listaCidades", cidades);
+		memoria.addAttribute("listaCidades", this.converteCidade(repository.findAll()));
 		
 		return "crud";
+	}
+	
+	private List<Cidade> converteCidade(List<CidadeEntidade> cidades){
+		return cidades.stream()
+				.map(cidade -> new Cidade(cidade.getNome(), cidade.getEstado()))
+				.collect(Collectors.toList());
 	}
 	
 	@RequestMapping(value = "/criar", method = RequestMethod.POST)
@@ -40,19 +47,18 @@ public class CidadeController {
 			
 			validacao
 				.getFieldErrors()
-				.forEach(
-					error -> memoria.addAttribute(
+				.forEach(error -> memoria.addAttribute(
 							error.getField(), error.getDefaultMessage()));
 			
 			memoria.addAttribute("nomeInformado", cidade.getNome());
 			memoria.addAttribute("estadoInformado", cidade.getEstado());
-			memoria.addAttribute("listaCidades", cidades);
+			memoria.addAttribute("listaCidades", this.converteCidade(repository.findAll()));
 			
 			return "/crud";
 								
 		}else {
 			
-			cidades.add(cidade);
+			repository.save(cidade.clonar());
 		}
 		
 	
@@ -63,10 +69,9 @@ public class CidadeController {
 	@RequestMapping(value = "/excluir", method = RequestMethod.GET)
 	public String excluir(@RequestParam String nome, @RequestParam String estado)  {
 		
-		cidades.removeIf(cidadeAtual ->
-			cidadeAtual.getNome().equals(nome) &&
-			cidadeAtual.getEstado().equals(estado)
-		);
+		var cidadeEstadoEncontrada = repository.findByNomeAndEstado(nome, estado);
+		
+		cidadeEstadoEncontrada.ifPresent(repository::delete);
 		
 		return "redirect:/";
 	}
@@ -74,14 +79,12 @@ public class CidadeController {
 	@RequestMapping(value = "/preparaAlterar", method = RequestMethod.GET)
 	public String preparaAlterar(@RequestParam String nome, @RequestParam String estado, Model memoria) {
 		
-		var cidadeAtual = cidades.stream()
-				.filter(cidade -> cidade.getNome().contentEquals(nome) &&
-				cidade.getEstado().equals(estado)).findAny();
+		var cidadeAtual = repository.findByNomeAndEstado(nome, estado);
 		
-		if(cidadeAtual.isPresent()) {
-			memoria.addAttribute("cidadeAtual", cidadeAtual.get());
-			memoria.addAttribute("listaCidades", cidades);
-		}
+		cidadeAtual.ifPresent(cidadeEncontrada -> {
+			memoria.addAttribute("cidadeAtual", cidadeEncontrada);
+			memoria.addAttribute("listaCidades", this.converteCidade(repository.findAll()));
+		});
 		
 		return "/crud";
 	}
@@ -91,10 +94,16 @@ public class CidadeController {
 			BindingResult validacao,
 			Model memoria) {
 		
-		cidades.removeIf(cidadeAtual -> cidadeAtual.getNome().contentEquals(nomeAtual) &&
-				cidadeAtual.getEstado().equals(estadoAtual));
+		var cidadeAtual = repository.findByNomeAndEstado(nomeAtual, estadoAtual);
 		
-		criar(cidade, validacao, memoria);
+		if(cidadeAtual.isPresent()) {
+			
+			var cidadeEncontrada = cidadeAtual.get();
+			cidadeEncontrada.setNome(cidade.getNome());
+			cidadeEncontrada.setEstado(cidade.getEstado());
+			
+			repository.saveAndFlush(cidadeEncontrada);
+		}
 		
 		return "redirect:/";
 	}

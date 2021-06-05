@@ -1,4 +1,4 @@
-package com.crudcidades.entities;
+package com.crudcidades.cidade;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
@@ -24,6 +24,19 @@ public final class Cidade {
 	
 	public String getNome() {
 		return nome;
+	}
+	
+	public CidadeEntidade clonar() {
+		var cidadeEntidade = new CidadeEntidade();
+		
+		cidadeEntidade.setNome(this.getNome());
+		cidadeEntidade.setEstado(this.getEstado());
+		
+		return cidadeEntidade;
+	}
+	
+	public Cidade clonar(CidadeEntidade cidade) {
+		return new Cidade(cidade.getNome(), cidade.getEstado());
 	}
 }
 
